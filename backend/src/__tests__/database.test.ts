@@ -297,6 +297,113 @@ describe('Database Operations', () => {
 
       expect(dispute.initiator).toBe(userAddress.toLowerCase());
     });
+
+    it('should lowercase walletAddress in WHERE clause when querying users', async () => {
+      const addr = 'gwhere_user_1234567890abcdefghijklmn';
+      await prisma.user.create({
+        data: { walletAddress: addr, displayName: 'WHERE Test' },
+      });
+
+      const found = await prisma.user.findUnique({
+        where: { walletAddress: addr.toUpperCase() },
+      });
+
+      expect(found).toBeDefined();
+      expect(found?.walletAddress).toBe(addr);
+    });
+
+    it('should lowercase buyerAddress in WHERE clause when querying trades', async () => {
+      const buyerAddr = 'gwhere_buyer_1234567890abcdefghij';
+      const sellerAddr = 'gwhere_seller_9876543210abcdefghij';
+      await prisma.user.create({
+        data: { walletAddress: buyerAddr, displayName: 'Buyer' },
+      });
+      await prisma.user.create({
+        data: { walletAddress: sellerAddr, displayName: 'Seller' },
+      });
+
+      await prisma.trade.create({
+        data: {
+          tradeId: 'trade_where_lowercase_001',
+          buyerAddress: buyerAddr,
+          sellerAddress: sellerAddr,
+          amountUsdc: '100',
+          status: 'CREATED',
+        },
+      });
+
+      const trades = await prisma.trade.findMany({
+        where: { buyerAddress: buyerAddr.toUpperCase() },
+      });
+
+      expect(trades).toHaveLength(1);
+      expect(trades[0].buyerAddress).toBe(buyerAddr);
+    });
+
+    it('should lowercase sellerAddress in WHERE clause when querying trades', async () => {
+      const buyerAddr = 'gwhere2_buyer_1234567890abcdefghij';
+      const sellerAddr = 'gwhere2_seller_9876543210abcdefghij';
+      await prisma.user.create({
+        data: { walletAddress: buyerAddr, displayName: 'Buyer' },
+      });
+      await prisma.user.create({
+        data: { walletAddress: sellerAddr, displayName: 'Seller' },
+      });
+
+      await prisma.trade.create({
+        data: {
+          tradeId: 'trade_where_lowercase_002',
+          buyerAddress: buyerAddr,
+          sellerAddress: sellerAddr,
+          amountUsdc: '200',
+          status: 'FUNDED',
+        },
+      });
+
+      const trades = await prisma.trade.findMany({
+        where: { sellerAddress: sellerAddr.toUpperCase() },
+      });
+
+      expect(trades).toHaveLength(1);
+      expect(trades[0].sellerAddress).toBe(sellerAddr);
+    });
+
+    it('should lowercase initiator in WHERE clause when querying disputes', async () => {
+      const initAddr = 'gwhere_init_1234567890abcdefghijklm';
+      await prisma.user.create({
+        data: { walletAddress: initAddr, displayName: 'Initiator' },
+      });
+      const buyerAddr = 'gwhere3_buyer_1234567890abcdefghij';
+      await prisma.user.create({
+        data: { walletAddress: buyerAddr, displayName: 'Buyer' },
+      });
+
+      await prisma.trade.create({
+        data: {
+          tradeId: 'trade_where_lowercase_003',
+          buyerAddress: buyerAddr,
+          sellerAddress: initAddr,
+          amountUsdc: '300',
+          status: 'DISPUTED',
+        },
+      });
+
+      await prisma.dispute.create({
+        data: {
+          tradeId: 'trade_where_lowercase_003',
+          initiator: initAddr,
+          reason: 'WHERE test dispute',
+          status: 'OPEN',
+        },
+      });
+
+      const disputes = await prisma.dispute.findMany({
+        where: { initiator: initAddr.toUpperCase() },
+      });
+
+      expect(disputes).toHaveLength(1);
+      expect(disputes[0].initiator).toBe(initAddr);
+    });
   });
 
   describe('Database Integrity', () => {

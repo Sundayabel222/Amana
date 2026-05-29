@@ -73,6 +73,8 @@ model Trade {
   @@index([buyerAddress])
   @@index([sellerAddress])
   @@index([status])
+  @@index([buyerAddress, status, createdAt])
+  @@index([sellerAddress, status, createdAt])
 }
 
 /// Dispute model representing a dispute on a trade

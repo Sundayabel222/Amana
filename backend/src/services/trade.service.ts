@@ -5,6 +5,8 @@ export type TradeListFilters = {
   page?: number;
   limit?: number;
   sort?: string;
+  createdAfter?: string;
+  createdBefore?: string;
 };
 
 export class TradeAccessDeniedError extends Error {
@@ -13,6 +15,17 @@ export class TradeAccessDeniedError extends Error {
     this.name = "TradeAccessDeniedError";
   }
 }
+
+const TRADE_LIST_SELECT = {
+  id: true,
+  tradeId: true,
+  buyerAddress: true,
+  sellerAddress: true,
+  amountUsdc: true,
+  status: true,
+  createdAt: true,
+  updatedAt: true,
+};
 
 export class TradeService {
   constructor(private readonly prisma: PrismaClient) {}
@@ -23,10 +36,22 @@ export class TradeService {
     const skip = (page - 1) * limit;
     const orderBy = this.parseSort(filters.sort);
 
+    const normalizedAddress = address.toLowerCase();
+
     const where: Prisma.TradeWhereInput = {
-      OR: [{ buyer: address }, { seller: address }],
+      OR: [{ buyerAddress: normalizedAddress }, { sellerAddress: normalizedAddress }],
       ...(filters.status ? { status: filters.status } : {}),
     };
+
+    if (filters.createdAfter || filters.createdBefore) {
+      where.createdAt = {};
+      if (filters.createdAfter) {
+        where.createdAt.gte = new Date(filters.createdAfter);
+      }
+      if (filters.createdBefore) {
+        where.createdAt.lte = new Date(filters.createdBefore);
+      }
+    }
 
     const [items, total] = await Promise.all([
       this.prisma.trade.findMany({
@@ -34,6 +59,7 @@ export class TradeService {
         orderBy,
         skip,
         take: limit,
+        select: TRADE_LIST_SELECT,
       }),
       this.prisma.trade.count({ where }),
     ]);
@@ -50,6 +76,7 @@ export class TradeService {
   }
 
   async getTradeById(id: string, callerAddress: string) {
+    const normalizedAddress = callerAddress.toLowerCase();
     const numericId = Number(id);
     const orConditions: Prisma.TradeWhereInput[] = [{ tradeId: id }];
 
@@ -67,7 +94,7 @@ export class TradeService {
       return null;
     }
 
-    if (trade.buyer !== callerAddress && trade.seller !== callerAddress) {
+    if (trade.buyerAddress !== normalizedAddress && trade.sellerAddress !== normalizedAddress) {
       throw new TradeAccessDeniedError();
     }
 
@@ -75,34 +102,35 @@ export class TradeService {
   }
 
   async getUserStats(address: string) {
-    const trades = await this.prisma.trade.findMany({
-      where: {
-        OR: [{ buyer: address }, { seller: address }],
-      },
-      select: {
-        amountUsdc: true,
-        status: true,
-      },
-    });
+    const normalizedAddress = address.toLowerCase();
 
-    const openStatuses = new Set<TradeStatus>([
-      TradeStatus.CREATED,
-      TradeStatus.FUNDED,
-      TradeStatus.DELIVERED,
-      TradeStatus.DISPUTED,
+    const openStatuses = [TradeStatus.CREATED, TradeStatus.FUNDED, TradeStatus.DELIVERED, TradeStatus.DISPUTED];
+
+    const [countResult, openCount, volumeResult] = await Promise.all([
+      this.prisma.trade.count({
+        where: {
+          OR: [{ buyerAddress: normalizedAddress }, { sellerAddress: normalizedAddress }],
+        },
+      }),
+      this.prisma.trade.count({
+        where: {
+          OR: [{ buyerAddress: normalizedAddress }, { sellerAddress: normalizedAddress }],
+          status: { in: openStatuses },
+        },
+      }),
+      this.prisma.$queryRaw<{ total: string | null }[]>`
+        SELECT SUM(CAST("amountUsdc" AS DECIMAL)) as total
+        FROM "Trade"
+        WHERE ("buyerAddress" = ${normalizedAddress} OR "sellerAddress" = ${normalizedAddress})
+      `,
     ]);
 
-    const totalTrades = trades.length;
-    const totalVolume = trades.reduce((sum, trade) => {
-      const amount = Number(trade.amountUsdc);
-      return sum + (Number.isFinite(amount) ? amount : 0);
-    }, 0);
-    const openTrades = trades.filter((trade) => openStatuses.has(trade.status)).length;
+    const totalVolume = Number(volumeResult[0]?.total ?? 0);
 
     return {
-      totalTrades,
-      totalVolume,
-      openTrades,
+      totalTrades: countResult,
+      totalVolume: Number.isFinite(totalVolume) ? totalVolume : 0,
+      openTrades: openCount,
     };
   }
 
@@ -112,14 +140,13 @@ export class TradeService {
     }
 
     const [fieldRaw, dirRaw] = sort.split(":");
-    const field = fieldRaw as keyof Prisma.TradeOrderByWithRelationInput;
     const direction = dirRaw?.toLowerCase() === "asc" ? "asc" : "desc";
 
     const allowedFields = new Set<string>([
       "id",
       "tradeId",
-      "buyer",
-      "seller",
+      "buyerAddress",
+      "sellerAddress",
       "amountUsdc",
       "status",
       "createdAt",
@@ -130,6 +157,6 @@ export class TradeService {
       return { createdAt: "desc" };
     }
 
-    return { [field]: direction };
+    return { [fieldRaw]: direction };
   }
 }

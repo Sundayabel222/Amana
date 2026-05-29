@@ -1,18 +1,15 @@
 import { Request, Response, NextFunction } from "express";
 import jwt from "jsonwebtoken";
+import { isValidStellarAddress } from "../lib/stellar";
 
 export interface AuthRequest extends Request {
   user?: {
     walletAddress: string;
-    [key: string]: any;
+    [key: string]: unknown;
   };
 }
 
-export const authMiddleware = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) => {
+export const authMiddleware = (req: AuthRequest, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
@@ -20,25 +17,22 @@ export const authMiddleware = (
     }
 
     const token = authHeader.split(" ")[1];
-    
-    // In a real app we'd verify with a secret.
-    // For this implementation, we'll decode allowing tests to provide walletAddress.
     const secret = process.env.JWT_SECRET || "default_secret";
+
     try {
-      const decoded = jwt.verify(token, secret) as any;
-      req.user = decoded;
-      next();
-    } catch (err) {
-      // Fallback: decode directly without verifying (helpful for testing if no secret is set)
-      const decoded = jwt.decode(token) as any;
-      if (decoded && decoded.walletAddress) {
-        req.user = decoded;
-        next();
-      } else {
-        return res.status(401).json({ error: "Invalid token" });
+      const decoded = jwt.verify(token, secret) as { walletAddress?: string; [key: string]: unknown };
+
+      if (!decoded.walletAddress || !isValidStellarAddress(decoded.walletAddress)) {
+        return res.status(401).json({ error: "Invalid token payload" });
       }
+
+      decoded.walletAddress = decoded.walletAddress.toLowerCase();
+      req.user = decoded as { walletAddress: string; [key: string]: unknown };
+      next();
+    } catch {
+      return res.status(401).json({ error: "Invalid token" });
     }
-  } catch (error) {
+  } catch {
     return res.status(401).json({ error: "Unauthorized" });
   }
 };

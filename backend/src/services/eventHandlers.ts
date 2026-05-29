@@ -16,8 +16,8 @@ export async function handleTradeCreated(prisma: PrismaClient, event: ParsedEven
     },
     create: {
       tradeId: event.tradeId,
-      buyer: (event.data.buyer as string) || "",
-      seller: (event.data.seller as string) || "",
+      buyerAddress: (event.data.buyer as string) || "",
+      sellerAddress: (event.data.seller as string) || "",
       amountUsdc: String(event.data.amount_usdc ?? "0"),
       status,
     },
@@ -32,8 +32,8 @@ export async function handleTradeFunded(prisma: PrismaClient, event: ParsedEvent
     update: { status, updatedAt: new Date() },
     create: {
       tradeId: event.tradeId,
-      buyer: "",
-      seller: "",
+      buyerAddress: "",
+      sellerAddress: "",
       status,
     },
   });
@@ -47,8 +47,8 @@ export async function handleDeliveryConfirmed(prisma: PrismaClient, event: Parse
     update: { status, updatedAt: new Date() },
     create: {
       tradeId: event.tradeId,
-      buyer: "",
-      seller: "",
+      buyerAddress: "",
+      sellerAddress: "",
       status,
     },
   });
@@ -62,8 +62,8 @@ export async function handleFundsReleased(prisma: PrismaClient, event: ParsedEve
     update: { status, updatedAt: new Date() },
     create: {
       tradeId: event.tradeId,
-      buyer: "",
-      seller: "",
+      buyerAddress: "",
+      sellerAddress: "",
       status,
     },
   });
@@ -77,8 +77,8 @@ export async function handleDisputeInitiated(prisma: PrismaClient, event: Parsed
     update: { status, updatedAt: new Date() },
     create: {
       tradeId: event.tradeId,
-      buyer: "",
-      seller: "",
+      buyerAddress: "",
+      sellerAddress: "",
       status,
     },
   });
@@ -92,8 +92,8 @@ export async function handleDisputeResolved(prisma: PrismaClient, event: ParsedE
     update: { status, updatedAt: new Date() },
     create: {
       tradeId: event.tradeId,
-      buyer: "",
-      seller: "",
+      buyerAddress: "",
+      sellerAddress: "",
       status,
     },
   });

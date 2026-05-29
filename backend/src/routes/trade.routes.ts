@@ -11,7 +11,7 @@ export function createTradeRouter(prisma: PrismaClient) {
     if (!headerAddress || !headerAddress.trim()) {
       return null;
     }
-    return headerAddress.trim();
+    return headerAddress.trim().toLowerCase();
   };
 
   const requireAuth = (req: Request, res: Response): string | null => {
@@ -33,6 +33,8 @@ export function createTradeRouter(prisma: PrismaClient) {
     const pageRaw = req.query.page as string | undefined;
     const limitRaw = req.query.limit as string | undefined;
     const sort = req.query.sort as string | undefined;
+    const createdAfter = req.query.createdAfter as string | undefined;
+    const createdBefore = req.query.createdBefore as string | undefined;
 
     let status: TradeStatus | undefined;
     if (statusRaw) {
@@ -50,11 +52,22 @@ export function createTradeRouter(prisma: PrismaClient) {
       return;
     }
 
+    if (createdAfter && isNaN(Date.parse(createdAfter))) {
+      res.status(400).json({ error: "Invalid createdAfter date" });
+      return;
+    }
+    if (createdBefore && isNaN(Date.parse(createdBefore))) {
+      res.status(400).json({ error: "Invalid createdBefore date" });
+      return;
+    }
+
     const result = await tradeService.listUserTrades(callerAddress, {
       status,
       page,
       limit,
       sort,
+      createdAfter,
+      createdBefore,
     });
 
     res.status(200).json(result);
